@@ -3,6 +3,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from pvgis_fetch import get_pvgis_data
 from geocode_location import geocode_location
 from get_temps import get_temps
@@ -38,6 +39,18 @@ with tab1:
 
             st.success(f"Data fetched for years {start_year}–{end_year}")
 
+            st.subheader("Hourly Solar Irradiance")
+            fig2, ax2 = plt.subplots(figsize=(12, 4))
+            ax2.plot(df['timestamp'], df['GTI'], color='skyblue')
+            ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+            ax2.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
+            ax2.tick_params(axis='x', rotation=45)
+            ax2.set_xlabel("Month")
+            ax2.set_ylabel("Global Tilted Irradiance (W/m²)")
+            ax2.set_title("Hourly Solar Irradiance")
+            ax2.grid(True)
+            st.pyplot(fig2)
+
             df['hour'] = df['timestamp'].dt.hour
             df['month'] = df['timestamp'].dt.month
 
@@ -65,19 +78,7 @@ with tab1:
             ax1.grid(True)
             st.pyplot(fig1)
 
-            st.subheader("Hourly Solar Irradiance")
-
-            import matplotlib.dates as mdates
-            fig2, ax2 = plt.subplots(figsize=(12, 4))
-            ax2.plot(df['timestamp'], df['GTI'], color='skyblue')
-            ax2.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
-            ax2.xaxis.set_major_formatter(mdates.DateFormatter('%b %Y'))
-            ax2.tick_params(axis='x', rotation=45)
-            ax2.set_xlabel("Month")
-            ax2.set_ylabel("Global Tilted Irradiance (W/m²)")
-            ax2.set_title("Hourly Solar Irradiance")
-            ax2.grid(True)
-            st.pyplot(fig2)
+            
 
 
 # TAB 2: Forecast 
