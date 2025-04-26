@@ -90,6 +90,7 @@ with tab2:
     month = st.selectbox("Month", list(range(1, 13)), index=5)
     battery_capacity_ah = st.number_input("Battery Capacity (Ah)", min_value=10, max_value=1000, value=100)
     system_voltage = st.number_input("System Voltage (V)", min_value=6, max_value=48, value=12)
+    panel_power = st.number_input("Panel Power Rating (Watt)", min_value=1, max_value=5000, value=300)
     load_power_watts = st.number_input("Load Power (Watt)", min_value=1, max_value=500, value=10)
 
     model = st.session_state.get("model", None)
@@ -111,7 +112,7 @@ with tab2:
                 battery_wh_series = []
 
                 for gti in gtis:
-                    charge_wh = gti * 0.1 * 0.9
+                    charge_wh = (gti/1000) * panel_power * 0.9  # 90% efficiency
                     net_wh = charge_wh - load_power_watts
                     current_wh += net_wh
                     current_wh = max(0, min(battery_capacity_wh, current_wh))
