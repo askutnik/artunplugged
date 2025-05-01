@@ -7,6 +7,7 @@ import matplotlib.dates as mdates
 from pvgis_fetch import get_pvgis_data
 from geocode_location import geocode_location
 from get_temps import get_temps
+import numpy as np
 
 st.set_page_config(page_title='Art, Unplugged', layout='wide')
 st.title("Art, Unplugged: Energy Production Visualisation and Forecasting")
@@ -84,10 +85,11 @@ with tab1:
 # TAB 2: Forecast 
 with tab2:
     st.subheader("Forecast Solar Irradiance")
-    st.markdown("Predict GTI and battery levels across a full 12-hour daytime window.")
+    st.markdown("Predict GTI and battery levels across several days.")
 
-    # Inputs
+    #Inputs
     month = st.selectbox("Month", list(range(1, 13)), index=5)
+    num_days = st.number_input("Forecast Duration (Days)", min_value=1, max_value=7, value=3)
     battery_capacity_ah = st.number_input("Battery Capacity (Ah)", min_value=10, max_value=1000, value=100)
     system_voltage = st.number_input("System Voltage (V)", min_value=6, max_value=48, value=12)
     panel_power = st.number_input("Panel Power Rating (Watt)", min_value=1, max_value=5000, value=300)
@@ -95,46 +97,53 @@ with tab2:
 
     model = st.session_state.get("model", None)
 
-    if st.button("Forecast Day"):
+    if st.button("Forecast"):
         if model is None:
             st.warning("Please populate the model first by fetching PVGIS data in the first tab.")
         else:
-            hours = list(range(8, 20))  # 8:00 to 19:00
             lat = st.session_state.get("latitude", 51.17)
             lon = st.session_state.get("longitude", -0.83)
-            temps = get_temps(lat, lon, month=month, year=2023)
-            if temps and len(temps) >= 20:
-                forecast_temps = temps[8:20]
-                gtis = [model.predict([[hour, month, temp]])[0] for hour, temp in zip(hours, forecast_temps)]
 
-                battery_capacity_wh = battery_capacity_ah * system_voltage
-                current_wh = 0
-                battery_wh_series = []
+            gtis = []
+            forecast_temps = []
 
-                for gti in gtis:
-                    charge_wh = (gti/1000) * panel_power * 0.9  # 90% efficiency
-                    net_wh = charge_wh - load_power_watts
-                    current_wh += net_wh
-                    current_wh = max(0, min(battery_capacity_wh, current_wh))
-                    battery_wh_series.append(current_wh)
+            for day in range(num_days):
+                temps = get_temps(lat, lon, month=month, year=2023)
+                if not temps or len(temps) < 24:
+                    st.error(f"Could not fetch temperature data for day {day+1}")
+                    st.stop()
+                temps = [t + np.random.normal(0, 1.5) for t in temps[:24]] #  noise in the temperature data
+                for hour in range(24):
+                    temp = temps[hour]
+                    gti = model.predict([[hour, month, temp]])[0]
+                    gtis.append(gti)
+                    forecast_temps.append(temp)
 
-                ah_series = [round(wh / system_voltage, 2) for wh in battery_wh_series]
-                battery_pct = [round(wh / battery_capacity_wh * 100, 2) for wh in battery_wh_series]
+            battery_capacity_wh = battery_capacity_ah * system_voltage
+            current_wh = 0
+            battery_wh_series = []
 
-                fig, ax1 = plt.subplots(figsize=(10, 4))
-                ax1.set_xlabel("Hour")
-                ax1.set_ylabel("Predicted GTI (W/m²)", color='tab:blue')
-                ax1.plot(hours, gtis, color='tab:blue')
-                ax1.tick_params(axis='y', labelcolor='tab:blue')
+            for gti in gtis:
+                charge_wh = (gti / 1000) * panel_power * 0.9 # 90% efficiency
+                net_wh = charge_wh - load_power_watts
+                current_wh += net_wh
+                current_wh = max(0, min(battery_capacity_wh, current_wh))
+                battery_wh_series.append(current_wh)
 
-                ax2 = ax1.twinx()
-                ax2.set_ylabel("Battery Charge (%)", color='tab:orange')
-                ax2.plot(hours, battery_pct, color='tab:orange')
-                ax2.tick_params(axis='y', labelcolor='tab:orange')
+            battery_pct = [round(wh / battery_capacity_wh * 100, 2) for wh in battery_wh_series] 
+            full_hours = list(range(num_days * 24))
 
-                fig.suptitle("Forecasted GTI and Battery Charge")
-                fig.tight_layout()
-                st.pyplot(fig)
+            fig, ax1 = plt.subplots(figsize=(12, 5))
+            ax1.set_xlabel("Hour (0–{})".format(num_days * 24))
+            ax1.set_ylabel("Predicted GTI (W/m²)", color='tab:blue')
+            ax1.plot(full_hours, gtis, color='tab:blue', label="GTI")
+            ax1.tick_params(axis='y', labelcolor='tab:blue')
 
-            else:
-                st.error("Could not fetch temperature data. Try again later or check your Internet connection.")
+            ax2 = ax1.twinx()
+            ax2.set_ylabel("Battery Charge (%)", color='tab:orange')
+            ax2.plot(full_hours, battery_pct, color='tab:orange', label="Battery %")
+            ax2.tick_params(axis='y', labelcolor='tab:orange')
+
+            fig.suptitle(f"Forecasted GTI and Battery Charge Over {num_days} Days")
+            fig.tight_layout()
+            st.pyplot(fig)
